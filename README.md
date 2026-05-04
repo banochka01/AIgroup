@@ -1,78 +1,152 @@
-# JarvisOpenAI Multi-Agent Telegram Workspace (Extended)
+# Jarvis Multi-Agent Telegram Workspace
 
-This repository now contains a production-oriented extension scaffold for a **multi-bot Telegram AI team** architecture.
+Реальная multi-bot архитектура для Telegram-группы: coordinator bot принимает задачи, OpenAI строит план, отдельные agent bots публикуют короткий прогресс в группе, а полный финальный ответ уходит пользователю в личку coordinator-бота.
 
-## What was added
-- Multi-agent orchestrator with 3 modes:
-  - `group_showcase` (default)
-  - `private_only`
-  - `full_debug`
-- Provider abstraction (`OpenAI` and `Anthropic` placeholders)
-- Async FastAPI admin API:
-  - `/health`
+## Агенты
+
+- `Frontend` - UI, frontend architecture, accessibility
+- `Backend` - API, services, DB, security boundaries
+- `QA` - тесты, регрессии, acceptance checks
+- `DevOps` - Docker, VPS, окружение, деплой
+- `Designer` - UX, copy, presentation quality
+- `Manager` - планирование, маршрутизация, итоговая сборка
+
+Каждый агент использует отдельный Telegram token и отправляет сообщения самостоятельно.
+
+## Что есть
+
+- OpenAI async LLM provider с retry/backoff, timeout и понятными ошибками конфигурации.
+- Multi-round orchestrator: планирование, подзадачи, очереди сообщений, делегации, защита от циклов.
+- Agent-to-agent message bus с `task_id`, `hops`, дедупликацией маршрутов и лимитом сообщений на задачу.
+- Telegram coordinator commands:
+  - `/task`
   - `/agents`
-  - `/tasks`
+  - `/agent <name>`
+  - `/status`
   - `/stats`
-  - `/approvals`
-- Security command policy module (whitelist + blocked tokens)
-- SQLAlchemy async schema for:
-  - users, agents, tasks, subtasks, messages, delegations, memory, stats, approvals, settings
-- Deploy files:
-  - `Dockerfile`
-  - `docker-compose.yml`
-  - `.env.example`
+  - `/reset`
+- Dual-mode messaging:
+  - `group_showcase` - короткий прогресс в группе, финал в личку
+  - `private_only` - только личка
+  - `full_debug` - более подробные group updates
+- Async SQLAlchemy schema и сервисы для users, agents, tasks, subtasks, messages, delegations, memory, stats, approvals, execution logs.
+- Sandbox executor без shell: строгий allowlist, проверка путей, timeout, safe env, approval для рискованных команд, логи исполнения.
+- Docker Compose для VPS: Postgres + API + Telegram worker.
 
-## Structure
-- `src/jarvis_multiagent/api` FastAPI app
-- `src/jarvis_multiagent/telegram` orchestrator and routing core
-- `src/jarvis_multiagent/agents` agent profiles + role definitions
-- `src/jarvis_multiagent/services` LLM provider abstraction
-- `src/jarvis_multiagent/security` sandbox command policy
-- `src/jarvis_multiagent/db` async DB models/session
+## Env
 
-## Local setup
-1. Create env file:
-   ```bash
-   cp .env.example .env
-   ```
-2. Install:
-   ```bash
-   pip install -e .
-   ```
-3. Run API:
-   ```bash
-   uvicorn jarvis_multiagent.api.main:app --reload
-   ```
+Создайте `.env` из `.env.example` и заполните:
 
-## Docker deploy
 ```bash
-docker compose up --build -d
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4.1-mini
+
+TELEGRAM_COORDINATOR_BOT_TOKEN=
+TELEGRAM_FRONTEND_BOT_TOKEN=
+TELEGRAM_BACKEND_BOT_TOKEN=
+TELEGRAM_QA_BOT_TOKEN=
+TELEGRAM_DEVOPS_BOT_TOKEN=
+TELEGRAM_DESIGNER_BOT_TOKEN=
+TELEGRAM_MANAGER_BOT_TOKEN=
+TELEGRAM_GROUP_CHAT_ID=
 ```
 
-## VPS deploy (basic)
-1. Provision Ubuntu 22.04+
-2. Install Docker + Docker Compose
-3. Clone repo, set `.env`
-4. `docker compose up --build -d`
-5. Put reverse proxy (nginx/caddy) in front
-6. Add TLS and lock inbound ports
+Важно: пользователь должен сначала открыть coordinator-бота и отправить `/start`, иначе Telegram не разрешит отправить ему финальный ответ в личку.
 
-## Example usage
-Create task:
+## Локальный запуск
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+pip install -e .
+```
+
+API:
+
+```bash
+uvicorn jarvis_multiagent.api.main:app --reload
+```
+
+Telegram worker:
+
+```bash
+python -m jarvis_multiagent.telegram.runner
+```
+
+Для локального SQLite можно временно указать:
+
+```bash
+DATABASE_URL=sqlite+aiosqlite:///./jarvis.db
+```
+
+## VPS запуск
+
+Одна группа команд для свежего Ubuntu/Debian VPS:
+
+```bash
+sudo apt-get update && sudo apt-get install -y git ca-certificates curl && \
+git clone https://github.com/banochka01/AIgroup.git AIgroup && \
+cd AIgroup && \
+cp .env.example .env && \
+nano .env && \
+bash scripts/deploy_vps.sh
+```
+
+После изменения `.env` или обновления кода:
+
+```bash
+cd AIgroup && git pull && bash scripts/deploy_vps.sh
+```
+
+Если проект уже склонирован и `.env` заполнен:
+
+```bash
+bash scripts/deploy_vps.sh
+```
+
+```bash
+cp .env.example .env
+# заполните токены и OPENAI_API_KEY
+docker compose up --build -d
+docker compose logs -f api telegram
+```
+
+Сервисы:
+
+- `api` - FastAPI на `:8000`
+- `telegram` - polling coordinator bot
+- `db` - Postgres 16
+
+## API примеры
+
 ```bash
 curl -X POST http://localhost:8000/tasks \
-  -H 'content-type: application/json' \
-  -d '{"task_id": "t-1", "text": "create landing page for FPV shop"}'
+  -H "content-type: application/json" \
+  -d '{"text": "Подготовить план деплоя Telegram multi-agent системы на VPS"}'
 ```
 
-## Security notes
-- Command execution must pass whitelist checks.
-- Dangerous tokens are blocked (`rm -rf`, `sudo`, secret paths, etc.).
-- Keep approvals required for risky actions.
-- Never access credentials/cookies/system secrets.
+```bash
+curl http://localhost:8000/stats
+curl http://localhost:8000/approvals
+```
 
-## Next extension points
-- Hook real Telegram bot updates for each token.
-- Persist orchestrator messages and per-agent memory.
-- Integrate real OpenAI/Anthropic clients with retries/rate limits.
-- Implement `/build`, `/plan`, `/run`, `/agent`, `/pc`, `/shell`, `/files`, `/read`, `/write` command handlers using existing Jarvis command semantics in this backend.
+Sandbox:
+
+```bash
+curl -X POST http://localhost:8000/sandbox/execute \
+  -H "content-type: application/json" \
+  -d '{"command": "pytest", "workspace": "/app"}'
+```
+
+## Telegram пример
+
+1. Добавьте всех agent bots и coordinator bot в одну Telegram-группу.
+2. Пользователь пишет coordinator-боту в личку `/start`.
+3. В группе:
+
+```text
+/task Сделать аудит backend API, проверить Docker деплой и предложить тест-план
+```
+
+4. В группе появляются короткие сообщения от `Backend`, `QA`, `DevOps`, `Manager`.
+5. Полный итог приходит пользователю в личку от coordinator bot.

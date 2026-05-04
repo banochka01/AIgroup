@@ -33,6 +33,7 @@ class Task(Base):
     description: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(32), default="queued")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class Subtask(Base):
@@ -41,7 +42,10 @@ class Subtask(Base):
     task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"))
     agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id"))
     title: Mapped[str] = mapped_column(String(255))
+    details: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(32), default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class Message(Base):
@@ -61,6 +65,7 @@ class Delegation(Base):
     from_agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id"))
     to_agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id"))
     reason: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class Memory(Base):
@@ -69,6 +74,7 @@ class Memory(Base):
     agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id"))
     key: Mapped[str] = mapped_column(String(255))
     value: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class Stat(Base):
@@ -83,8 +89,24 @@ class Approval(Base):
     __tablename__ = "approvals"
     id: Mapped[int] = mapped_column(primary_key=True)
     task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"))
-    action: Mapped[str] = mapped_column(String(255))
+    action: Mapped[str] = mapped_column(Text)
     approved: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ExecutionLog(Base):
+    __tablename__ = "execution_logs"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id"), nullable=True)
+    command: Mapped[str] = mapped_column(Text)
+    cwd: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(32))
+    reason: Mapped[str] = mapped_column(Text, default="")
+    returncode: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    stdout: Mapped[str] = mapped_column(Text, default="")
+    stderr: Mapped[str] = mapped_column(Text, default="")
+    requires_approval: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class Setting(Base):
