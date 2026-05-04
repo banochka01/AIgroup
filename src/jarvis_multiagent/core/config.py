@@ -22,6 +22,11 @@ class Settings(BaseSettings):
 
     max_rounds_per_task: int = 8
     group_mode: str = "group_showcase"
+    llm_timeout_seconds: int = 45
+    openai_model: str = "gpt-4.1-mini"
+    anthropic_model: str = "claude-3-5-sonnet-latest"
+
+    telegram_group_chat_id: int = Field(default=0, alias="TELEGRAM_GROUP_CHAT_ID")
 
 
 settings = Settings()
